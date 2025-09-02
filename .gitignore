@@ -1,0 +1,9 @@
+# ignore any binaries generated
+bin/
+
+# ignore any build artifacts
+src/**/*.o
+
+# ignore any media files
+**/*.wav
+**/*.mp4
