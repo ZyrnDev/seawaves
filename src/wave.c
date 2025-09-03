@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-wav_file_t* wav_file_create() {
+wav_file_t* wav_file_create(void) {
     wav_file_t* ptr = calloc(1, sizeof(wav_file_t));
     if (ptr == NULL) {
         fprintf(stderr, "Failed to allocate memory for wav_file_t\n");
@@ -45,7 +45,7 @@ void wav_file_print(const wav_file_t* wav) {
     printf("    Chunk ID: %.4s\n", wav->riff_header.chunk_id);
     printf("    Chunk Size: %u\n", wav->riff_header.chunk_size);
     printf("    Format: %.4s\n", wav->riff_header.format);
-    printf("  FMT Subchunk:\n");
+    printf("  Format Subchunk:\n");
     printf("    Subchunk1 ID: %.4s\n", wav->fmt_subchunk.subchunk1_id);
     printf("    Subchunk1 Size: %u\n", wav->fmt_subchunk.subchunk1_size);
     printf("    Audio Format: %u\n", wav->fmt_subchunk.audio_format);

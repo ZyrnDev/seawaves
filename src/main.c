@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -35,14 +36,16 @@ int main(int argc, char *argv[]) {
 
     float max_amplitude = powf(2, wav_file->fmt_subchunk.bits_per_sample - 1) - 1;
 
-    for (size_t i = 0; i < 10 && i < wav_file->data_subchunk.subchunk2_size; i++) {
-        float sample = wav_file->data_subchunk.data[i];
-        sample /= max_amplitude;
-        sample -= 1;
-        printf("Sample %zu: 0x%02x | %03d | %.6f\n", i, wav_file->data_subchunk.data[i], wav_file->data_subchunk.data[i], sample);
+    int sample_bytes = wav_file->fmt_subchunk.bits_per_sample / 8;
+    for (size_t i = 0; i < 10 && i < wav_file->data_subchunk.subchunk2_size / sample_bytes; i++) {
+        size_t value = 0;
+        for (int b = 0; b < sample_bytes; b++) {
+            value |= wav_file->data_subchunk.data[i * sample_bytes + b] << (b * 8);
+        }
+
+        float sample = value / max_amplitude - 1;
+        printf("Sample %zu: 0x%0*zx | %0*zu | %.6f\n", i, sample_bytes * 2, value, sample_bytes * 3, value, sample);
     }
-
-
 
 ///////////////////////////////////////////////////////////////////////////////
 

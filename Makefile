@@ -1,4 +1,5 @@
-CFLAGS:=-pedantic -W -Wextra -std=c99
+CC:=clang
+CFLAGS:=-pedantic -W -Wall -pedantic -ftrapv -fsanitize=address -fno-omit-frame-pointer -DLOG_LEVEL=LOG_INFO -std=c99
 LDFLAGS:=-lm
 
 FILE:=output.wav

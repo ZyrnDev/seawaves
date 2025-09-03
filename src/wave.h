@@ -33,9 +33,7 @@ typedef struct wav_file {
     data_subchunk_t data_subchunk;
 } wav_file_t;
 
-
-
-wav_file_t* wav_file_create();
+wav_file_t* wav_file_create(void);
 void wav_file_free(wav_file_t* wav);
 
 void wav_file_print(const wav_file_t* wav);

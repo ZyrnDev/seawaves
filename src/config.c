@@ -4,7 +4,7 @@
 
 #include "config.h"
 
-configuration_t configuration_create() {
+configuration_t configuration_create(void) {
     configuration_t config;
     config.destination_path = NULL; // Default value
     return config;
