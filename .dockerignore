@@ -1,0 +1,6 @@
+dev.sh
+Dockerfile
+.dockerignore
+.git/
+README.md
+*.wav

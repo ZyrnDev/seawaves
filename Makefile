@@ -1,6 +1,8 @@
 CC:=clang
-CFLAGS:=-pedantic -W -Wall -pedantic -ftrapv -fsanitize=address -fno-omit-frame-pointer -DLOG_LEVEL=LOG_INFO -std=c99
-LDFLAGS:=-lm
+CFLAGS:=-pedantic -Wall -Wextra -Werror -Wno-gnu-zero-variadic-macro-arguments -pedantic -ftrapv -fsanitize=address -fno-omit-frame-pointer -std=c99 -I/usr/local/include
+# -DLOG_LEVEL=LOG_INFO
+LDFLAGS:=-L/usr/local/lib
+LDLIBS:=-lraylib -lm
 
 FILE:=output.wav
 
@@ -14,23 +16,27 @@ OBJECTS=$(SOURCES:.c=.o)
 
 $(EXECUTABLE): $(OBJECTS)
 	@mkdir -p bin
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 all: $(EXECUTABLE)
 
+play: test.wav
+	#ffplay -autoexit -nodisp $<
+	cvlc --play-and-exit $<
+
 clean:
-	rm -f $(EXECUTABLE) $(OBJECTS) #*.wav *.mp4
+	rm -f $(EXECUTABLE) $(OBJECTS) *.wav *.mp4
 
 run: ./$(EXECUTABLE)
 	./$(EXECUTABLE) test.wav
 
 %.wav: all
-	./$(EXECUTABLE) $@
+	./$(EXECUTABLE) --destination $@ generate
 
 %.mp4: %.wav
 	ffmpeg -f lavfi -i color=c=black:s=1920x1080:r=5 -i $< -c:a aac -b:a 128k -shortest -max_interleave_delta 200M -fflags +shortest $@
 
-.PHONY: all clean run
+.PHONY: all clean run play

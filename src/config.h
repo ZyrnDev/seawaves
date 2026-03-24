@@ -2,6 +2,8 @@
 #define __SEAWAVES_CONFIG_H__
 
 typedef struct configuration {
+    char* action;
+    char* source_path;
     char* destination_path;
 } configuration_t;
 
