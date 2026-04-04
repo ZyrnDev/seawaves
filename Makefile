@@ -1,16 +1,19 @@
-CC:=clang
-CFLAGS:=-pedantic -Wall -Wextra -Werror -Wno-gnu-zero-variadic-macro-arguments -pedantic -ftrapv -fsanitize=address -fno-omit-frame-pointer -std=c99 -I/usr/local/include
-# -DLOG_LEVEL=LOG_INFO
-LDFLAGS:=-L/usr/local/lib
-LDLIBS:=-lraylib -lm
-
 FILE:=output.wav
 
 APP_NAME=seawaves
 EXECUTABLE=bin/$(APP_NAME)
 
 SRC = src
-SOURCES=$(wildcard $(SRC)/*.c $(SRC)/**/*.c)
+LIB = lib
+
+CC:=clang
+# CFLAGS:=-pedantic -Wall -Wextra -Werror -Wno-gnu-zero-variadic-macro-arguments -pedantic -ftrapv -fsanitize=address -fno-omit-frame-pointer -std=c99 -I/usr/local/include -I$(LIB)
+CFLAGS:=-pedantic -Wall -Wextra -Werror -pedantic -ftrapv -fno-omit-frame-pointer -std=c99 -I/usr/local/include -I$(LIB)
+# -DLOG_LEVEL=LOG_INFO
+LDFLAGS:=-L/usr/local/lib
+LDLIBS:=-lraylib -lm
+
+SOURCES=$(wildcard $(SRC)/*.c $(SRC)/**/*.c $(LIB)/*.c $(LIB)/**/*.c)
 #HEADERS=$(wildcard $(SRC)/*.h $(SRC)/**/*.h)
 OBJECTS=$(SOURCES:.c=.o)
 
