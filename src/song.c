@@ -15,12 +15,13 @@ float saw_wave(float frequency, float amplitude, float time) {
 
 float square_wave(float frequency, float amplitude, float time) {
     float t = fmodf(time * frequency, 1.0f);
-    return amplitude * (0.5f + ((t < 0.5f) ? 0.5f : -0.5f));
+    return 0.5f + amplitude * .99 * ((t < 0.5f) ? 0.5f : -0.5f);
 }
 
 float triangle_wave(float frequency, float amplitude, float time) {
     float t = fmodf(time * frequency, 1.0f);
-    return amplitude * (1.0f - 4.0f * fabs(t - 0.5f));
+    return 0.5f + amplitude * (1.0f - 4.0f * fabsf(t - 0.5f));
+    amplitude * (1.0f - 4.0f * fabs(t - 0.5f));
 }
 
 float sample_song(Song song, float time) {

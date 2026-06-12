@@ -3,11 +3,13 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <sys/types.h>
-
-#include "audio_buffer.h"
+#include <assert.h>
 
 #include "logging.h"
 #include "song.h"
+
+const int screenWidth  = 1280;
+const int screenHeight = 720;
 
 #define UNUSED(v) (void) (v)
 
@@ -45,6 +47,7 @@ void graph_draw(graph_t *graph) {
     if (graph == NULL) {
         return;
     }
+
     // Draw a rectangle representing the graph
     DrawRectangleRec(graph->rect, graph->color);
 
@@ -84,9 +87,56 @@ void print_wave_info(Wave wav) {
     printf("\tChannels: '%d'\n", wav.channels);
 }
 
+#define MAX_SAMPLE_COUNT (screenWidth)
+
+typedef struct SampleBuffer {
+    size_t    len;
+    size_t    cap;
+    uint16_t *buf;
+} SampleBuffer;
+
+SampleBuffer sb_create(uint16_t *backing, size_t cap) {
+    SampleBuffer sb = {0};
+    sb.buf          = backing;
+    sb.cap          = cap;
+    sb.len          = 0;
+
+    return sb;
+}
+
+// claude: translate this comment to simplified chinese
+static inline void sb_push_sample_mod(SampleBuffer *sb, float value) {
+    sb->buf[sb->len % MAX_SAMPLE_COUNT] = value;
+    sb->len                             = (sb->len + 1) % MAX_SAMPLE_COUNT;
+}
+
+// Draw a vertical bar representing the note's amplitude at the given position
+// x: The x-coordinate of the bar's left edge
+// y: The y-coordinate of the bar's center
+// width: The width of the bar
+// amplitude: The amplitude of the note (0.0 to 1.0)
+// max_height: The maximum height of the bar when amplitude is 1.0
+void DrawNote(int x, int y, int width, float amplitude, int max_height) {
+    const int height = (int) (amplitude * (float) max_height);
+    DrawRectangle(x, y - height / 2, width, height, BLUE);
+}
+
+#include <stddef.h>
+#include <stdint.h>
+
+void sb_slice_graph(SampleBuffer *sb, int x, int y, int slice_width) {
+    for (size_t i = 0; i < sb->len; i++) {
+        uint16_t sample = sb->buf[i];
+        DrawNote(x + i * slice_width, y, slice_width, sample / (float) UINT16_MAX, screenHeight);
+    }
+}
+
+static SampleBuffer sampleBuffer = {0};
+
 #define AUDIO_STREAM_SAMPLE_RATE 44100
 #define AUDIO_STREAM_SAMPLE_SIZE 16
 #define AUDIO_STREAM_CHANNELS    2
+
 // NOTE: we can setup our own audio buffer and just memcpy instead of iterating
 // through frames
 void fill_audio_buffer(void *buffer, unsigned int frames) {
@@ -98,6 +148,8 @@ void fill_audio_buffer(void *buffer, unsigned int frames) {
         sample_buffer += frame * AUDIO_STREAM_CHANNELS;
         sample_buffer[0] = (uint16_t) (sample * UINT16_MAX);
         sample_buffer[1] = sample_buffer[0];  // Duplicate for stereo
+
+        sb_push_sample_mod(&sampleBuffer, sample_buffer[0]);
 
         current_sample++;
     }
@@ -117,6 +169,11 @@ void fill_audio_buffer(void *buffer, unsigned int frames) {
 // ref:
 // https://github.com/raysan5/raylib/blob/4ebe7d62159257cae48d47afd4d8ce2ecf0afb6e/examples/audio/audio_raw_stream.c
 int main(void) {
+    uint16_t *progMem = malloc(sizeof(uint16_t) * MAX_SAMPLE_COUNT);
+    assert(progMem);
+
+    sampleBuffer = sb_create(progMem, MAX_SAMPLE_COUNT);
+
     UNUSED(current_sample);
 
     SetTraceLogCallback(ColouredLog);
@@ -125,17 +182,14 @@ int main(void) {
 
     // Initialization
     //--------------------------------------------------------------------------------------
-    const int screenWidth  = 1280;
-    const int screenHeight = 720;
-
     InitAudioDevice();
 
     InitWindow(screenWidth, screenHeight, "seawaves");
 
     TraceLog(LOG_INFO, "Creating graph...");
-    graph_t graph = graph_create(0, 0, screenWidth, screenHeight, 50, test_sampler);
+    // graph_t graph = graph_create(0, 0, screenWidth, screenHeight, 50, test_sampler);
 
-    SetTargetFPS(60);  // Set our game to run at 60 frames-per-second
+    SetTargetFPS(24);  // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
 
     SetMasterVolume(0.2);
@@ -175,6 +229,8 @@ int main(void) {
     }
     */
 
+    // for (size_t i = 0; i < MAX_SAMPLE_COUNT; i++) { sb_push_sample_mod(&sampleBuffer, 0); }
+
     // Main game loop
     while (!WindowShouldClose()) {
         // Update
@@ -188,7 +244,7 @@ int main(void) {
 
         ClearBackground(RAYWHITE);
 
-        graph_draw(&graph);
+        // graph_draw(&graph);
 
         // BeginMode2D(camera);
 
@@ -198,6 +254,10 @@ int main(void) {
         // DrawText("FULL", screenWidth, screenHeight, 20, DARKGRAY);
 
         // EndMode2D();
+
+        // NOTE:
+        sb_slice_graph(&sampleBuffer, 0, screenHeight / 
+            2, 1);
 
         EndDrawing();
         //----------------------------------------------------------------------------------
@@ -209,6 +269,8 @@ int main(void) {
     //--------------------------------------------------------------------------------------
     CloseWindow();  // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
+
+    free(progMem);
 
     return 0;
 }
