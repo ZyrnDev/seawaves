@@ -2,6 +2,7 @@
 #define SONG_H
 
 #include <stddef.h>
+#include <stdbool.h>
 
 typedef struct {
     float frequency;
@@ -25,6 +26,7 @@ typedef struct {
 } Song;
 
 float sample_song(Song song, float time);
+bool  is_song_finished(Song song, float time);
 
 #define MARY_HAD_A_LITTLE_LAMB                        \
     ((Song) {                                         \

@@ -1,9 +1,13 @@
 #include <math.h>
 #include <raylib.h>
+#include <raymath.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <sys/types.h>
 #include <assert.h>
+
+#include <stddef.h>
+#include <stdint.h>
 
 #include "logging.h"
 #include "song.h"
@@ -12,6 +16,8 @@ const int screenWidth  = 1280;
 const int screenHeight = 720;
 
 #define UNUSED(v) (void) (v)
+
+void DrawNote(int x, int y, int width, float amplitude, int max_height);
 
 // https://www.raylib.com/examples/audio/loader.html?name=audio_sound_loading
 // #define MAX_DB (70)
@@ -89,26 +95,141 @@ void print_wave_info(Wave wav) {
 
 #define MAX_SAMPLE_COUNT (screenWidth)
 
+#define SLIDER_H       7
+#define SLIDER_THUMB_R 10
+
+int ui_slider(int x, int y, int width, int max_val, int *position) {
+    int changed = 0;
+
+    Rectangle track = {(float) x, (float) (y - SLIDER_H / 2), (float) width, (float) SLIDER_H};
+
+    float t        = (max_val > 0) ? (float) *position / (float) max_val : 0.0f;
+    float thumb_cx = x + t * width;
+    float thumb_cy = (float) y;
+
+    Vector2 mouse      = GetMousePosition();
+    bool    over_thumb = CheckCollisionPointCircle(mouse, (Vector2){thumb_cx, thumb_cy}, SLIDER_THUMB_R + 4);
+
+    static int active_y = -1;
+
+    if (over_thumb && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+        active_y = y;
+
+    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+        active_y = -1;
+
+    bool dragging = (active_y == y);
+
+    if (dragging) {
+        float raw     = (mouse.x - (float) x) / (float) width;
+        float clamped = raw < 0.0f ? 0.0f : raw > 1.0f ? 1.0f : raw;
+        int   new_val = (int) (clamped * (float) max_val + 0.5f);
+        if (new_val != *position) {
+            *position = new_val;
+            changed   = 1;
+        }
+        thumb_cx = x + clamped * width;
+    }
+
+    DrawRectangleRounded(track, 1.0f, 6, DARKGRAY);
+
+    Rectangle active = {track.x, track.y, thumb_cx - track.x, track.height};
+    DrawRectangleRounded(active, 1.0f, 6, SKYBLUE);
+
+    if (over_thumb || dragging)
+        DrawCircleLines((int) thumb_cx, (int) thumb_cy, SLIDER_THUMB_R + 5, Fade(SKYBLUE, 0.4f));
+
+    DrawCircleV((Vector2){thumb_cx, thumb_cy}, SLIDER_THUMB_R, dragging ? BLUE : SKYBLUE);
+
+    return changed;
+}
+
+#define CHECKBOX_SIZE 16
+
+int ui_checkbox(int x, int y, bool *checked) {
+    Rectangle box   = {(float) x, (float) y, CHECKBOX_SIZE, CHECKBOX_SIZE};
+    Vector2   mouse = GetMousePosition();
+    bool      over  = CheckCollisionPointRec(mouse, box);
+
+    if (over && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        *checked = !*checked;
+        return 1;
+    }
+
+    Color fill   = *checked ? SKYBLUE : DARKGRAY;
+    Color border = (over || *checked) ? BLUE : GRAY;
+    DrawRectangleRounded(box, 0.2f, 4, fill);
+    DrawRectangleRoundedLines(box, 0.2f, 4, border);
+
+    if (*checked) {
+        float cx = x + CHECKBOX_SIZE * 0.5f;
+        float cy = y + CHECKBOX_SIZE * 0.5f;
+        DrawLineEx((Vector2){cx - 5, cy}, (Vector2){cx - 1, cy + 4}, 2.0f, WHITE);
+        DrawLineEx((Vector2){cx - 1, cy + 4}, (Vector2){cx + 5, cy - 4}, 2.0f, WHITE);
+    }
+
+    return 0;
+}
+
 typedef struct SampleBuffer {
-    size_t    len;
-    size_t    cap;
-    uint16_t *buf;
+    size_t    length;
+    size_t    capacity;
+    uint16_t *data;
 } SampleBuffer;
 
 SampleBuffer sb_create(uint16_t *backing, size_t cap) {
     SampleBuffer sb = {0};
-    sb.buf          = backing;
-    sb.cap          = cap;
-    sb.len          = 0;
+    sb.data         = backing;
+    sb.capacity     = cap;
+    sb.length       = 0;
 
     return sb;
 }
 
-// claude: translate this comment to simplified chinese
-static inline void sb_push_sample_mod(SampleBuffer *sb, float value) {
-    sb->buf[sb->len % MAX_SAMPLE_COUNT] = value;
-    sb->len                             = (sb->len + 1) % MAX_SAMPLE_COUNT;
+typedef uint8_t BufferViewKind;
+enum {
+    BUFFER_VIEW_KIND_SLICE = 0,
+};
+
+int VISUAL_SCALING_FACTOR = 50;
+
+void sb_render_slices(SampleBuffer *b, int x, int y, size_t start, size_t length) {
+    for (size_t i = 0; i < length; i++) {
+        uint16_t sample = b->data[start + i];
+        DrawNote(x + i, y, 1, (((float) UINT16_MAX - sample) / UINT16_MAX) * ((float) VISUAL_SCALING_FACTOR / 100),
+                 screenHeight);
+    }
 }
+
+void sb_view(SampleBuffer *b, BufferViewKind kind, int x, int y, size_t start, size_t length) {
+    assert(b);
+
+    assert(start <= b->capacity);
+    assert(start + length <= b->capacity);
+
+    switch (kind) {
+        case BUFFER_VIEW_KIND_SLICE: {
+            sb_render_slices(b, x, y, start, length);
+            break;
+        }
+        default: {
+            break;
+        };
+    }
+}
+
+static inline void sb_push_sample(SampleBuffer *buf, uint16_t sample) {
+    assert(buf->length + 1 <= buf->capacity);
+
+    buf->data[buf->length] = sample;
+    buf->length++;
+}
+
+// claude: translate this comment to simplified chinese
+// static inline void sb_push_sample_mod(SampleBuffer *sb, float value) {
+//     sb->data[sb->length % MAX_SAMPLE_COUNT] = value;
+//     sb->length                              = (sb->length + 1) % MAX_SAMPLE_COUNT;
+// }
 
 // Draw a vertical bar representing the note's amplitude at the given position
 // x: The x-coordinate of the bar's left edge
@@ -121,15 +242,12 @@ void DrawNote(int x, int y, int width, float amplitude, int max_height) {
     DrawRectangle(x, y - height / 2, width, height, BLUE);
 }
 
-#include <stddef.h>
-#include <stdint.h>
-
-void sb_slice_graph(SampleBuffer *sb, int x, int y, int slice_width) {
-    for (size_t i = 0; i < sb->len; i++) {
-        uint16_t sample = sb->buf[i];
-        DrawNote(x + i * slice_width, y, slice_width, sample / (float) UINT16_MAX, screenHeight);
-    }
-}
+// void sb_slice_graph(SampleBuffer *sb, int x, int y, int slice_width) {
+//     for (size_t i = 0; i < sb->length; i++) {
+//         uint16_t sample = sb->data[i];
+//         DrawNote(x + i * slice_width, y, slice_width, sample / (float) UINT16_MAX, screenHeight);
+//     }
+// }
 
 static SampleBuffer sampleBuffer = {0};
 
@@ -140,6 +258,9 @@ static SampleBuffer sampleBuffer = {0};
 // NOTE: we can setup our own audio buffer and just memcpy instead of iterating
 // through frames
 void fill_audio_buffer(void *buffer, unsigned int frames) {
+    if (is_song_finished(MARY_HAD_A_LITTLE_LAMB, (float) current_sample / AUDIO_STREAM_SAMPLE_RATE))
+        return;
+
     for (unsigned int frame = 0; frame < frames; frame++) {
         uint16_t *sample_buffer = (uint16_t *) buffer;
 
@@ -149,30 +270,21 @@ void fill_audio_buffer(void *buffer, unsigned int frames) {
         sample_buffer[0] = (uint16_t) (sample * UINT16_MAX);
         sample_buffer[1] = sample_buffer[0];  // Duplicate for stereo
 
-        sb_push_sample_mod(&sampleBuffer, sample_buffer[0]);
+        sb_push_sample(&sampleBuffer, sample_buffer[0]);
 
         current_sample++;
     }
-
-    // for (unsigned int frame = 0; frame < frames; frame++) {
-    //     uint16_t *sample_ptr = (uint16_t *) buffer;
-    //     sample_ptr += frame * AUDIO_STREAM_CHANNELS;
-    //     sample_ptr[0] =
-    //         (uint16_t) (note(440.0f, (float) UINT16_MAX, (float) current_sample / AUDIO_STREAM_SAMPLE_RATE));
-    //     sample_ptr[1] = sample_ptr[0];  // Duplicate for stereo
-
-    //     current_sample = (current_sample + 1) % AUDIO_STREAM_SAMPLE_RATE;
-    // }
 }
 
 // NOTE: the below link seems to have info we need to get the Audio Stream working.
 // ref:
 // https://github.com/raysan5/raylib/blob/4ebe7d62159257cae48d47afd4d8ce2ecf0afb6e/examples/audio/audio_raw_stream.c
 int main(void) {
-    uint16_t *progMem = malloc(sizeof(uint16_t) * MAX_SAMPLE_COUNT);
+    size_t    BYTES   = (1 << 20) * 16 * sizeof(uint16_t);
+    uint16_t *progMem = malloc(BYTES);
     assert(progMem);
 
-    sampleBuffer = sb_create(progMem, MAX_SAMPLE_COUNT);
+    sampleBuffer = sb_create(progMem, BYTES);
 
     UNUSED(current_sample);
 
@@ -230,7 +342,8 @@ int main(void) {
     */
 
     // for (size_t i = 0; i < MAX_SAMPLE_COUNT; i++) { sb_push_sample_mod(&sampleBuffer, 0); }
-
+    int  start = 0;
+    bool track = true;
     // Main game loop
     while (!WindowShouldClose()) {
         // Update
@@ -244,6 +357,16 @@ int main(void) {
 
         ClearBackground(RAYWHITE);
 
+        // SCROLL UI
+        if (track) {
+            start = (sampleBuffer.length < screenWidth) ? 0 : sampleBuffer.length - screenWidth;
+        }
+
+        ui_slider(10, 96, 256, 100, &VISUAL_SCALING_FACTOR);
+        ui_slider(10, 10, 620, sampleBuffer.length - screenWidth, &start);
+        ui_checkbox(700, 10, &track);
+
+        sb_view(&sampleBuffer, BUFFER_VIEW_KIND_SLICE, 0, screenHeight / 2.0, start, screenWidth);
         // graph_draw(&graph);
 
         // BeginMode2D(camera);
@@ -256,8 +379,7 @@ int main(void) {
         // EndMode2D();
 
         // NOTE:
-        sb_slice_graph(&sampleBuffer, 0, screenHeight / 
-            2, 1);
+        // sb_slice_graph(&sampleBuffer, 0, screenHeight / 2, 1);
 
         EndDrawing();
         //----------------------------------------------------------------------------------
